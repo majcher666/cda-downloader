@@ -14,7 +14,7 @@ DOWNLOADS_DIR = os.path.join(BASE_DIR, "downloads")
 SHINDEN_DEBUG_DIR = os.path.join(DOWNLOADS_DIR, "shinden_debug")
 
 # ---------------------------------------------------------------------------
-# Główny downloader cda.pl ("/") - przyjmuje TYLKO zwykłe linki do filmów.
+# Główny downloader cda.pl ("/") - przyjmuje TYLKO zwykłe linki do filmow.
 # ---------------------------------------------------------------------------
 
 JOBS = {}

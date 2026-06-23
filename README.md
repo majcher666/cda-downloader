@@ -14,13 +14,16 @@ Wklejasz linki do filmów na cda.pl (każdy w nowej linii), każdy dostaje włas
 ## `/shinden` — scraper Shinden
 
 1. Wklejasz link do listy odcinków serii (`.../series/.../episodes`), ewentualnie kilka, każdy w nowej linii.
-2. **Faza wykrywania**: program wchodzi na listę i wyciąga odcinki na podstawie struktury tabeli (`table.data-view-table-episodes`, wiersze `<tr data-episode-no="N">`).
-3. Dla każdego odcinka osobno (równolegle, maks. 3 naraz): wchodzi na stronę odcinka, znajduje wpis serwisu **Cda** z **polskimi napisami** po danych w atrybucie `data-episode` (JSON), klika „Pokaż” i czeka na pojawienie się odtwarzacza cda.pl w `div#player-block` (z możliwą krótką reklamą/licznikiem po drodze). Klikanie odbywa się zarówno przez normalny klik Playwrighta, jak i bezpośrednio przez JS (`element.click()`), co omija nakładki (np. baner GDPR) wizualnie leżące na przycisku. Jeśli próba się nie powiedzie (zawiesza się licznik reklamy, błąd sieciowy API, captcha) — ponawiamy do 5 razy.
-4. Wynik: panel na każdy odcinek z linkiem cda.pl (i przyciskiem kopiowania) albo błędem (z przyciskiem do podglądu zapisanego HTML strony — debug). Na dole podsumowanie + przyciski „Skopiuj wszystkie” i „Wyślij do downloadera”.
+2. **Faza wykrywania**: program wchodzi na listę i wyciąga odcinki na podstawie zweryfikowanej struktury tabeli (`<tr data-episode-no="N">`, `td.ep-title`, link w `td.button-group`).
+3. Dla każdego odcinka osobno (równolegle, domyślnie maks. 3 naraz): wchodzi na stronę odcinka, znajduje wpis serwisu **Cda** z **polskimi napisami** po danych w atrybucie `data-episode` (JSON), klika „Pokaż” (z retry do 5 razy, bo strona bywa kapryśna - banery GDPR, reklamy z licznikiem, chwilowe błędy API) i czeka na pojawienie się odtwarzacza cda.pl w `div#player-block`.
+4. Wynik: panel na każdy odcinek z linkiem cda.pl (i przyciskiem kopiowania) albo błędem (z przyciskiem doładowania pełnego HTML strony - debug). Na dole podsumowanie + przyciski „Skopiuj wszystkie” i „Wyślij do downloadera”.
 
-### ⚠️ Ograniczenie: hCaptcha
+### Co robi scraper, a czego nie
 
-Strona ma szablon `hcaptcha-tmpl` („Albo reklamy, albo reCaptcha”) — czasem zamiast reklamy może wyskoczyć captcha blokująca dostęp do playera. **Kod nigdy nie próbuje jej rozwiązać automatycznie** — wykrywa jej obecność i zgłasza błąd dla tego konkretnego odcinka. Taki odcinek trzeba sprawdzić ręcznie w przeglądarce.
+- **Nigdy nie rozwiązuje hCaptchy automatycznie** — jak się pojawi, zgłasza błąd dla tego odcinka, trzeba sprawdzić ręcznie.
+- Używa „stealth” kontekstu Playwrighta (realny User-Agent, maskowanie `navigator.webdriver` itp.) - shinden.pl serwował uboższą listę serwisów (bez Cda) wykrytym botom headless Chromium.
+- Klika przyciski "Pokaż" przez bezpośrednie wywołanie JS (`element.click()`), nie symulację myszki - omija nakładki (GDPR/cookies) wizualnie leżące na wierchu.
+- `/shinden` **tylko wyszukuje linki** — nigdy nie pobiera plików ani nie odwiedza cda.pl w celu ekstrakcji wideo.
 
 ## Struktura projektu
 
@@ -31,7 +34,7 @@ cda-downloader/
 ├── cda/
 │   ├── __init__.py
 │   ├── shinden.py           # get_episode_list + resolve_cda_link/resolve_many
-│   └── extractor.py         # ekstrakcja z cda.pl (równolegle) + pobieranie i łączenie (ffmpeg)
+│   └── extractor.py         # ekstrakcja z cda.pl + pobieranie i łączenie (ffmpeg)
 ├── templates/
 │   ├── index.html           # downloader cda.pl
 │   └── shinden.html         # scraper Shinden -> linki cda.pl
@@ -43,11 +46,9 @@ cda-downloader/
 └── README.md
 ```
 
-(downloads/ i venv/ nie są commitowane - patrz .gitignore)
+## Instalacja / uruchomienie (Windows)
 
-## Instalacja / uruchomienie
-
-`install.bat` (raz), potem `run.bat`. Strona główna: `http://localhost:5000/`, scraper Shinden: `http://localhost:5000/shinden`.
+`install.bat` (raz) tworzy venv, instaluje zależności i Chromium dla Playwrighta, potem `run.bat` startuje appkę na `http://localhost:5000/`.
 
 ## Wymagania
 
@@ -57,6 +58,6 @@ cda-downloader/
 
 ## Uwagi / ograniczenia
 
-- 3–5 równoległych zadań = tyle samo niezależnych instancji headless Chromium na raz — przy słabszym komputerze zmniejsz `max_workers` w odpowiednich miejscach.
+- 3-5 równoległych zadań = tyle samo niezależnych instancji headless Chromium na raz — przy słabszym komputerze zmniejsz `max_workers` w odpowiednich miejscach `app.py`.
 - Strony cda.pl / shinden.pl mogą zmieniać strukturę — w razie zmian logika w `cda/extractor.py` / `cda/shinden.py` może wymagać aktualizacji.
 - Pobieranie treści powinno być zgodne z regulaminem serwisów i prawami autorskimi — projekt edukacyjny / na własne potrzeby.
