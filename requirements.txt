@@ -1,0 +1,4 @@
+Flask>=3.0
+requests>=2.31
+playwright>=1.44
+imageio-ffmpeg>=0.5
