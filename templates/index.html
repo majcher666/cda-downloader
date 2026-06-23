@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>CDA Downloader</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="top-nav">
+            <h1>CDA Downloader</h1>
+            <a href="/shinden" class="nav-link">🔍 Znajdź linki CDA na Shinden →</a>
+        </div>
+        <p class="subtitle">Wklej jeden lub więcej linków do filmów na cda.pl (każdy w nowej linii).</p>
+
+        <form id="link-form">
+            <textarea id="links" name="links" rows="8" placeholder="https://www.cda.pl/video/...&#10;https://www.cda.pl/video/..."></textarea>
+            <button type="submit" id="submit-btn">Generuj</button>
+        </form>
+
+        <div id="panels"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('link-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const panelsBox = document.getElementById('panels');
+
+        let pollTimer = null;
+
+        // Jeśli przyszliśmy ze strony /shinden z gotową listą linków - wklej je automatycznie.
+        window.addEventListener('DOMContentLoaded', () => {
+            const prefill = sessionStorage.getItem('cda_prefill');
+            if (prefill) {
+                document.getElementById('links').value = prefill;
+                sessionStorage.removeItem('cda_prefill');
+            }
+        });
+
+        function shortUrl(u) {
+            if (!u) return '';
+            return u.length > 70 ? u.slice(0, 67) + '...' : u;
+        }
+
+        function createPanel(index, label) {
+            const panel = document.createElement('div');
+            panel.className = 'link-panel';
+            panel.id = `panel-${index}`;
+
+            panel.innerHTML = `
+                <div class="panel-header">
+                    <span class="spinner"></span>
+                    <span class="panel-title">${index}. ${shortUrl(label)}</span>
+                </div>
+                <div class="progress-track">
+                    <div class="progress-fill" id="progress-${index}" style="width: 0%;"></div>
+                </div>
+                <div class="panel-result" id="result-${index}"></div>
+                <details class="panel-log-details">
+                    <summary>Szczegółowy log</summary>
+                    <div class="status-log" id="log-${index}"></div>
+                </details>
+            `;
+            return panel;
+        }
+
+        function renderResult(container, r) {
+            container.innerHTML = '';
+            if (!r) return;
+
+            if (r.title) {
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'result-title';
+                titleDiv.textContent = r.title;
+                container.appendChild(titleDiv);
+            }
+
+            if (r.ok && r.download_filename) {
+                const a = document.createElement('a');
+                a.className = 'download-btn';
+                a.href = `/download/${r.download_filename}`;
+                a.textContent = '⬇ Pobierz cały film (wideo + audio)';
+                container.appendChild(a);
+            } else if (r.ok && r.merge_error) {
+                const errDiv = document.createElement('div');
+                errDiv.className = 'error-msg';
+                errDiv.textContent = '⚠ Nie udało się przygotować pliku: ' + r.merge_error;
+                container.appendChild(errDiv);
+
+                if (r.files && r.files.length > 0) {
+                    const note = document.createElement('div');
+                    note.className = 'direct-url';
+                    note.textContent = 'Surowe linki (kliknięcie może dać 403 - wklej w adres przeglądarki):';
+                    container.appendChild(note);
+                    r.files.forEach((f) => {
+                        const urlDiv = document.createElement('div');
+                        urlDiv.className = 'direct-url';
+                        urlDiv.textContent = `[${f.kind}] ${f.url}`;
+                        container.appendChild(urlDiv);
+                    });
+                }
+            } else if (!r.ok) {
+                const errDiv = document.createElement('div');
+                errDiv.className = 'error-msg';
+                errDiv.textContent = '⚠ ' + (r.error || 'Nieznany błąd.');
+                container.appendChild(errDiv);
+            }
+        }
+
+        function updatePanel(link) {
+            const panel = document.getElementById(`panel-${link.index}`);
+            if (!panel) return;
+
+            const fill = document.getElementById(`progress-${link.index}`);
+            fill.style.width = `${link.percent || 0}%`;
+
+            const logBox = document.getElementById(`log-${link.index}`);
+            logBox.innerHTML = link.log.map(line => `<div>${line}</div>`).join('');
+
+            if (link.done) {
+                panel.classList.add('done');
+                if (link.result && link.result.ok && link.result.download_filename) {
+                    panel.classList.add('success');
+                } else {
+                    panel.classList.add('error');
+                }
+                renderResult(document.getElementById(`result-${link.index}`), link.result);
+            }
+        }
+
+        function poll(jobId) {
+            pollTimer = setInterval(async () => {
+                try {
+                    const resp = await fetch(`/status/${jobId}`);
+                    const data = await resp.json();
+
+                    if (data.error) {
+                        clearInterval(pollTimer);
+                        submitBtn.disabled = false;
+                        return;
+                    }
+
+                    data.links.forEach(updatePanel);
+
+                    if (data.done) {
+                        clearInterval(pollTimer);
+                        submitBtn.disabled = false;
+                    }
+                } catch (err) {
+                    clearInterval(pollTimer);
+                    submitBtn.disabled = false;
+                }
+            }, 700);
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const raw = document.getElementById('links').value;
+            const urls = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+            if (urls.length === 0) return;
+
+            panelsBox.innerHTML = '';
+            urls.forEach((url, i) => {
+                panelsBox.appendChild(createPanel(i + 1, url));
+            });
+
+            submitBtn.disabled = true;
+
+            try {
+                const resp = await fetch('/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'links=' + encodeURIComponent(raw),
+                });
+                const data = await resp.json();
+
+                if (data.error) {
+                    submitBtn.disabled = false;
+                    return;
+                }
+
+                poll(data.job_id);
+            } catch (err) {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Znajdź linki CDA na Shinden</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="top-nav">
+            <h1>Shinden → CDA</h1>
+            <a href="/" class="nav-link">← Wróć do downloadera</a>
+        </div>
+        <p class="subtitle">
+            Wklej link do listy odcinków serii na shinden.pl (np.
+            <code>https://shinden.pl/series/45178-koutetsujou-no-kabaneri/episodes</code>) — każdy w nowej linii,
+            jeśli chcesz sprawdzić kilka serii na raz.
+            Dla każdego odcinka program znajdzie wersję z serwisu <strong>Cda</strong> z <strong>polskimi napisami</strong>
+            i wyciągnie link do strony cda.pl (nie pobiera jeszcze plików).
+        </p>
+
+        <form id="shinden-form">
+            <textarea id="series_links" name="series_links" rows="4" placeholder="https://shinden.pl/series/.../episodes"></textarea>
+            <button type="submit" id="submit-btn">Szukaj linków</button>
+        </form>
+
+        <div id="discovery-banner" class="discovery-banner" style="display:none;">
+            <div class="panel-header">
+                <span class="spinner"></span>
+                <span>Szukam odcinków...</span>
+            </div>
+            <div class="status-log" id="discovery-log"></div>
+        </div>
+
+        <div id="summary-box" class="discovery-banner" style="display:none;">
+            <div id="summary-text"></div>
+            <button id="copy-all-btn" class="secondary-btn" type="button">📋 Skopiuj wszystkie znalezione linki</button>
+            <button id="send-to-downloader-btn" class="secondary-btn" type="button">➡ Wyślij do downloadera</button>
+        </div>
+
+        <div id="panels"></div>
+    </div>
+
+    <script>
+        const form = document.getElementById('shinden-form');
+        const submitBtn = document.getElementById('submit-btn');
+        const panelsBox = document.getElementById('panels');
+        const discoveryBanner = document.getElementById('discovery-banner');
+        const discoveryLog = document.getElementById('discovery-log');
+        const summaryBox = document.getElementById('summary-box');
+        const summaryText = document.getElementById('summary-text');
+        const copyAllBtn = document.getElementById('copy-all-btn');
+        const sendToDownloaderBtn = document.getElementById('send-to-downloader-btn');
+
+        let pollTimer = null;
+        let panelsCreated = false;
+
+        function shortLabel(s) {
+            if (!s) return '';
+            return s.length > 80 ? s.slice(0, 77) + '...' : s;
+        }
+
+        function createPanel(ep) {
+            const panel = document.createElement('div');
+            panel.className = 'link-panel';
+            panel.id = `panel-${ep.index}`;
+            panel.innerHTML = `
+                <div class="panel-header">
+                    <span class="spinner"></span>
+                    <span class="panel-title">${shortLabel(ep.label)}</span>
+                </div>
+                <div class="panel-result" id="result-${ep.index}"></div>
+                <details class="panel-log-details">
+                    <summary>Szczegółowy log</summary>
+                    <div class="status-log" id="log-${ep.index}"></div>
+                </details>
+            `;
+            return panel;
+        }
+
+        function ensurePanels(episodes) {
+            if (panelsCreated) return;
+            panelsBox.innerHTML = '';
+            episodes.forEach((ep) => panelsBox.appendChild(createPanel(ep)));
+            panelsCreated = true;
+        }
+
+        function updatePanel(ep) {
+            const panel = document.getElementById(`panel-${ep.index}`);
+            if (!panel) return;
+
+            const logBox = document.getElementById(`log-${ep.index}`);
+            logBox.innerHTML = ep.log.map(line => `<div>${line}</div>`).join('');
+
+            const resultBox = document.getElementById(`result-${ep.index}`);
+            resultBox.innerHTML = '';
+
+            if (ep.done) {
+                panel.classList.add('done');
+                if (ep.ok && ep.cda_url) {
+                    panel.classList.add('success');
+                    const urlDiv = document.createElement('div');
+                    urlDiv.className = 'direct-url cda-found';
+                    urlDiv.textContent = ep.cda_url;
+                    resultBox.appendChild(urlDiv);
+
+                    const copyBtn = document.createElement('button');
+                    copyBtn.type = 'button';
+                    copyBtn.className = 'copy-btn';
+                    copyBtn.textContent = '📋 Kopiuj';
+                    copyBtn.addEventListener('click', () => {
+                        navigator.clipboard.writeText(ep.cda_url);
+                        copyBtn.textContent = '✓ Skopiowano';
+                        setTimeout(() => { copyBtn.textContent = '📋 Kopiuj'; }, 1500);
+                    });
+                    resultBox.appendChild(copyBtn);
+                } else {
+                    panel.classList.add('error');
+                    const errDiv = document.createElement('div');
+                    errDiv.className = 'error-msg';
+                    errDiv.textContent = '⚠ ' + (ep.error || 'Nie znaleziono linku CDA.');
+                    resultBox.appendChild(errDiv);
+
+                    if (ep.debug_file) {
+                        const debugBtn = document.createElement('button');
+                        debugBtn.type = 'button';
+                        debugBtn.className = 'copy-btn';
+                        debugBtn.textContent = '🔍 Zobacz source strony (debug)';
+                        debugBtn.addEventListener('click', () => {
+                            window.open('/shinden/debug/' + encodeURIComponent(ep.debug_file), '_blank');
+                        });
+                        resultBox.appendChild(debugBtn);
+                    }
+                }
+            }
+        }
+
+        function renderSummary(episodes) {
+            const found = episodes.filter(e => e.done && e.ok && e.cda_url);
+            const total = episodes.length;
+            summaryBox.style.display = 'block';
+            summaryText.textContent = `Znaleziono ${found.length} / ${total} link(ów) CDA z polskimi napisami.`;
+
+            copyAllBtn.onclick = () => {
+                const text = found.map(e => e.cda_url).join('\n');
+                navigator.clipboard.writeText(text);
+                copyAllBtn.textContent = '✓ Skopiowano';
+                setTimeout(() => { copyAllBtn.textContent = '📋 Skopiuj wszystkie znalezione linki'; }, 1500);
+            };
+
+            sendToDownloaderBtn.onclick = () => {
+                const text = found.map(e => e.cda_url).join('\n');
+                sessionStorage.setItem('cda_prefill', text);
+                window.location.href = '/';
+            };
+        }
+
+        function poll(jobId) {
+            pollTimer = setInterval(async () => {
+                try {
+                    const resp = await fetch(`/shinden/status/${jobId}`);
+                    const data = await resp.json();
+
+                    if (data.error) {
+                        clearInterval(pollTimer);
+                        submitBtn.disabled = false;
+                        return;
+                    }
+
+                    if (data.phase === 'discovering') {
+                        discoveryBanner.style.display = 'block';
+                        discoveryLog.innerHTML = data.discovery_log.map(l => `<div>${l}</div>`).join('');
+                    } else {
+                        discoveryBanner.style.display = 'none';
+                    }
+
+                    if (data.episodes && data.episodes.length > 0) {
+                        ensurePanels(data.episodes);
+                        data.episodes.forEach(updatePanel);
+                    }
+
+                    if (data.done) {
+                        clearInterval(pollTimer);
+                        submitBtn.disabled = false;
+                        if (data.episodes && data.episodes.length > 0) {
+                            renderSummary(data.episodes);
+                        }
+                    }
+                } catch (err) {
+                    clearInterval(pollTimer);
+                    submitBtn.disabled = false;
+                }
+            }, 700);
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const raw = document.getElementById('series_links').value;
+            if (!raw.trim()) return;
+
+            panelsBox.innerHTML = '';
+            panelsCreated = false;
+            summaryBox.style.display = 'none';
+            discoveryBanner.style.display = 'block';
+            discoveryLog.innerHTML = '';
+            submitBtn.disabled = true;
+
+            try {
+                const resp = await fetch('/shinden/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'series_links=' + encodeURIComponent(raw),
+                });
+                const data = await resp.json();
+
+                if (data.error) {
+                    submitBtn.disabled = false;
+                    return;
+                }
+
+                poll(data.job_id);
+            } catch (err) {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

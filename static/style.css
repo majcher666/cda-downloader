@@ -1,0 +1,265 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: #0f1115;
+    color: #e8e8e8;
+    margin: 0;
+    padding: 40px 16px;
+}
+
+.container {
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+h1 {
+    margin-bottom: 4px;
+}
+
+.top-nav {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.nav-link {
+    color: #4f8cff;
+    text-decoration: none;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.nav-link:hover {
+    text-decoration: underline;
+}
+
+code {
+    background: #1a1d23;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.subtitle {
+    color: #9aa0a6;
+    margin-bottom: 24px;
+}
+
+textarea {
+    width: 100%;
+    background: #1a1d23;
+    color: #e8e8e8;
+    border: 1px solid #2c2f36;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 14px;
+    resize: vertical;
+}
+
+button {
+    margin-top: 12px;
+    background: #4f8cff;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #3d78e8;
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#panels {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.link-panel {
+    background: #1a1d23;
+    border: 1px solid #2c2f36;
+    border-radius: 10px;
+    padding: 14px;
+    transition: border-color 0.2s ease;
+}
+
+.link-panel.success {
+    border-color: #2fa86b;
+}
+
+.link-panel.error {
+    border-color: #b3413a;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e8e8e8;
+    word-break: break-all;
+}
+
+.spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #3a3f47;
+    border-top-color: #4f8cff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+.link-panel.done .spinner {
+    display: none;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.progress-track {
+    width: 100%;
+    height: 8px;
+    background: #0f1115;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid #2c2f36;
+}
+
+.progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #4f8cff, #6fa8ff);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+.link-panel.success .progress-fill {
+    background: linear-gradient(90deg, #2fa86b, #45c585);
+}
+
+.link-panel.error .progress-fill {
+    background: linear-gradient(90deg, #b3413a, #d85c50);
+}
+
+.panel-result {
+    margin-top: 10px;
+}
+
+.panel-log-details {
+    margin-top: 10px;
+}
+
+.panel-log-details summary {
+    cursor: pointer;
+    font-size: 12px;
+    color: #6b7280;
+    user-select: none;
+}
+
+.status-log {
+    margin-top: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 12px;
+    color: #b8bcc4;
+    font-family: Consolas, Menlo, monospace;
+    line-height: 1.6;
+    background: #0f1115;
+    border-radius: 6px;
+    padding: 10px;
+}
+
+.result-title {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.download-btn {
+    display: inline-block;
+    background: #2fa86b;
+    color: #fff;
+    text-decoration: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.download-btn:hover {
+    background: #268f5a;
+}
+
+.direct-url {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #6b7280;
+    word-break: break-all;
+}
+
+.error-msg {
+    color: #ff8c82;
+    font-size: 14px;
+}
+
+.discovery-banner {
+    margin-top: 20px;
+    background: #1a1d23;
+    border: 1px solid #2c2f36;
+    border-radius: 10px;
+    padding: 14px;
+}
+
+.secondary-btn {
+    margin-top: 10px;
+    margin-right: 8px;
+    background: #2c2f36;
+    color: #e8e8e8;
+    border: 1px solid #3a3f47;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.secondary-btn:hover {
+    background: #383d46;
+}
+
+.copy-btn {
+    margin-top: 6px;
+    background: #2c2f36;
+    color: #e8e8e8;
+    border: 1px solid #3a3f47;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.copy-btn:hover {
+    background: #383d46;
+}
+
+.cda-found {
+    color: #9fd6b5;
+    word-break: break-all;
+}
