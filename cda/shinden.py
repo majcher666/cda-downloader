@@ -70,6 +70,14 @@ LOAD_ERROR_TEXT = "Problem z załadowaniem danych"
 # sie po pierwszej nieudanej probie.
 MAX_PLAYER_ATTEMPTS = 5
 
+# Kanoniczny link do strony filmu na cda.pl - TAKI SAM, jaki dostaje sie
+# klikajac w tytul filmu wewnatrz osadzonego playera (np.
+# "https://www.cda.pl/video/16760112c7"). To NIE jest to samo co adres
+# samego osadzonego playera (iframe "https://ebd.cda.pl/<rozmiar>/<id>") -
+# ten drugi dziala, ale ma inny uklad HTML niz normalna strona cda.pl/video/
+# i reszta kodu (cda/extractor.py) jest pisana pod ten normalny uklad.
+VIDEO_PAGE_PATTERN = re.compile(r"https?://(?:www\.)?cda\.pl/video/[A-Za-z0-9]+", re.IGNORECASE)
+
 
 # Banner GDPR/CMP (tri-table CMP), ktory pokazuje sie na shinden.pl przy
 # pierwszym wejsciu i moze blokowac doladowanie pelnej listy serwisow
@@ -320,6 +328,49 @@ def _dismiss_legacy_cookie_bar(page) -> None:
         pass
 
 
+def _extract_canonical_cda_url(iframe_el):
+    """Z osadzonego playera (iframe "https://ebd.cda.pl/<rozmiar>/<id>")
+    wyciaga KANONICZNY link do strony filmu ("https://www.cda.pl/video/<id>"),
+    czyli ten sam, ktory dostaloby sie klikajac w tytul filmu wewnatrz
+    osadzonego playera (widoczny w jego stopce, np. link "Kabaneri7" pod
+    odtwarzaczem prowadzacy na "https://www.cda.pl/video/16760112c7").
+
+    Najpierw probuje odczytac TEN konkretny link <a href="...cda.pl/video/...">
+    bezposrednio z DOM osadzonego playera (frame'a) - to jest realny,
+    kanoniczny adres filmu. Jesli z jakiegos powodu sie nie uda (np. frame
+    jeszcze niedoczytany), pada na wyprowadzenie linku z adresu samego
+    iframe'a (ostatni segment sciezki to ID filmu - ten sam wzorzec)."""
+    src = iframe_el.get_attribute("src") or ""
+
+    try:
+        frame = iframe_el.content_frame()
+    except Exception:
+        frame = None
+
+    if frame is not None:
+        try:
+            anchor = frame.query_selector("a[href*='cda.pl/video/']")
+            if anchor:
+                href = anchor.get_attribute("href") or ""
+                found = VIDEO_PAGE_PATTERN.search(href)
+                if found:
+                    return found.group(0)
+        except Exception:
+            pass
+
+    # Fallback: wyprowadzamy kanoniczny adres z adresu embed - ostatni
+    # segment sciezki w "https://ebd.cda.pl/<rozmiar>/<id>" to to samo ID
+    # filmu co w "https://www.cda.pl/video/<id>".
+    try:
+        video_id = src.rstrip("/").rsplit("/", 1)[-1]
+        if video_id and re.match(r"^[A-Za-z0-9]+$", video_id):
+            return f"https://www.cda.pl/video/{video_id}"
+    except Exception:
+        pass
+
+    return None
+
+
 def resolve_cda_link(page, episode_url: str, progress_cb=None) -> dict:
     """
     Wchodzi (na PRZEKAZANEJ stronie/page, zeby dalo sie reuzyc te sama
@@ -414,12 +465,9 @@ def resolve_cda_link(page, episode_url: str, progress_cb=None) -> dict:
         if "cda_url" in captured:
             return
         url = response.url
-        try:
-            host = urlparse(url).hostname or ""
-        except Exception:
-            host = ""
-        if host.endswith("cda.pl") and "/video/" in url:
-            captured["cda_url"] = url
+        found = VIDEO_PAGE_PATTERN.match(url)
+        if found:
+            captured["cda_url"] = found.group(0)
 
     page.on("response", handle_response)
 
@@ -484,9 +532,9 @@ def resolve_cda_link(page, episode_url: str, progress_cb=None) -> dict:
                     "#player-block iframe[src*='cda.pl'], iframe[src*='cda.pl']"
                 )
                 if iframe:
-                    src = iframe.get_attribute("src")
-                    if src:
-                        captured["cda_url"] = src
+                    canonical = _extract_canonical_cda_url(iframe)
+                    if canonical:
+                        captured["cda_url"] = canonical
                         found_this_attempt = True
                         break
             except Exception:
